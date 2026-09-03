@@ -1,0 +1,19 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF is ready!</h3>
+  <p>Text formatted and converted into a clean PDF document.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" action="{% url 'text-to-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Document title</label>{{ form.title }}</div>
+    <div class="pf-field"><label>Text</label>{{ form.text }}</div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-pdf"></i>&nbsp; Convert to PDF</button>
+  </div>
+</form>
+{% endblock %}

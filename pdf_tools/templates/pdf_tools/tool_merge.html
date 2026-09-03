@@ -1,0 +1,16 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDFs are merged!</h3>
+  <p>{{ job.original_size_bytes|filesizeformat }} combined into one file.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'merge-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_multi.html" with accept=".pdf" accept_label="PDF files" field_name="files" %}
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-layer-group"></i>&nbsp; Merge PDF</button>
+  </div>
+</form>
+{% endblock %}

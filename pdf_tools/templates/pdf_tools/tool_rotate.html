@@ -1,0 +1,25 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF has been rotated!</h3>
+  <p>{{ result.rotated_pages }} page{{ result.rotated_pages|pluralize }} rotated.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'rotate-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Rotation angle</label>{{ form.degrees }}</div>
+    <div class="pf-field"><label>Apply to</label>{{ form.scope }}</div>
+    <div class="pf-field">
+      <label>Pages (if "Selected pages")</label>
+      {{ form.pages }}
+      <div class="pf-hint">e.g. 1-3, 5</div>
+    </div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-rotate"></i>&nbsp; Rotate PDF</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}{{ tool.name }} - Pdfino{% endblock %}
+{% block meta_description %}{{ tool.desc }}{% endblock %}
+
+{% block content %}
+<div class="pf-tool-header pf-container">
+  <div class="pf-tool-icon"><i class="fa-solid fa-{{ tool.icon }}"></i></div>
+  <h1>{{ tool.name }}</h1>
+  <p>{{ tool.desc }}</p>
+</div>
+
+<div class="pf-container">
+  <div class="pf-panel">
+    {% if error %}
+      <div class="pf-alert pf-alert-error"><i class="fa-solid fa-circle-exclamation"></i><span>{{ error }}</span></div>
+    {% endif %}
+
+    {% if success %}
+      <div class="pf-result">
+        {% block result_body %}
+        <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+        <h3>All done!</h3>
+        <p>Your file is ready to download.</p>
+        {% endblock %}
+        <div class="pf-result-actions">
+          {% if job %}
+            <a href="{% url 'download' job.id %}" class="btn-pf-primary btn"><i class="fa-solid fa-download"></i>&nbsp; Download {{ job.result_filename }}</a>
+          {% endif %}
+          <a href="{% url tool.slug %}" class="btn-pf-outline btn">Start Again</a>
+        </div>
+      </div>
+    {% else %}
+      {% block form_body %}{% endblock %}
+    {% endif %}
+  </div>
+
+  <div class="pf-security-badges">
+    <span><i class="fa-solid fa-lock"></i> Encrypted upload</span>
+    <span><i class="fa-solid fa-clock"></i> Auto-deleted after processing</span>
+    <span><i class="fa-solid fa-user-shield"></i> No account required</span>
+  </div>
+</div>
+{% endblock %}

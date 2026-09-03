@@ -1,0 +1,23 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Pages extracted!</h3>
+  <p>{{ result.extracted_pages }} page{{ result.extracted_pages|pluralize }} pulled into a new PDF.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'extract-pages' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field">
+      <label>Pages to extract</label>
+      {{ form.pages }}
+      <div class="pf-hint">e.g. "1-3, 5, 7-10"</div>
+    </div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-export"></i>&nbsp; Extract Pages</button>
+  </div>
+</form>
+{% endblock %}

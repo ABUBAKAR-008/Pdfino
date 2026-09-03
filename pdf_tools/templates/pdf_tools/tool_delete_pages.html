@@ -1,0 +1,23 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Pages deleted!</h3>
+  <p>{{ result.remaining_pages }} page{{ result.remaining_pages|pluralize }} remain in the document.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'delete-pages' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field">
+      <label>Pages to delete</label>
+      {{ form.pages }}
+      <div class="pf-hint">e.g. "1-3, 5, 7-10" - upload a file first if you'd like exact page numbers.</div>
+    </div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-trash"></i>&nbsp; Delete Pages</button>
+  </div>
+</form>
+{% endblock %}

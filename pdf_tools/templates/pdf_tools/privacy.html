@@ -1,0 +1,23 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}Privacy Policy - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:60px 0;max-width:760px;">
+  <h1 style="font-weight:800;margin-bottom:18px;">Privacy Policy</h1>
+  <div style="color:var(--pf-ink-soft);line-height:1.7;">
+    <h5 style="color:var(--pf-ink);margin-top:22px;">Files you upload</h5>
+    <p>Files you upload are used only to perform the operation you requested. Generated files are
+    automatically deleted from our servers after a short retention window (see the site footer for
+    the current value). We do not read, share, sell, or use the content of your files for any other
+    purpose.</p>
+    <h5 style="color:var(--pf-ink);margin-top:22px;">What we store</h5>
+    <p>We keep a small metadata record of each processing job (which tool was used, file size, and
+    timestamps) so we can operate the service and clean up files reliably. We never store the
+    contents of your documents in our database.</p>
+    <h5 style="color:var(--pf-ink);margin-top:22px;">Accounts</h5>
+    <p>Creating an account is optional. If you do, we store your username, email and a securely
+    hashed password using Django's built-in authentication system.</p>
+    <h5 style="color:var(--pf-ink);margin-top:22px;">Contact</h5>
+    <p>Questions about this policy can be directed to the site administrator.</p>
+  </div>
+</div>
+{% endblock %}

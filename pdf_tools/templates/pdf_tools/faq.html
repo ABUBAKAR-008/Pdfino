@@ -1,0 +1,31 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}FAQ - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:60px 0;max-width:720px;">
+  <h1 style="font-weight:800;margin-bottom:26px;">Frequently asked questions</h1>
+  <details class="pf-faq-item" open>
+    <summary>Is Pdfino free to use?</summary>
+    <p>Yes. All core PDF tools are free to use, with generous file size limits.</p>
+  </details>
+  <details class="pf-faq-item">
+    <summary>How long are my files kept?</summary>
+    <p>Uploaded and generated files are automatically removed from our servers a short time after processing.</p>
+  </details>
+  <details class="pf-faq-item">
+    <summary>Do I need to create an account?</summary>
+    <p>No. All tools work without signing up. A free account simply lets you keep a history of your recent conversions.</p>
+  </details>
+  <details class="pf-faq-item">
+    <summary>Is my PDF to Word conversion editable?</summary>
+    <p>Yes. Pdfino rebuilds the document structure - paragraphs, headings, tables and images - into a genuinely editable Word file.</p>
+  </details>
+  <details class="pf-faq-item">
+    <summary>What file types can I upload?</summary>
+    <p>PDF for most tools, and JPG/PNG for the image-conversion tools. Every upload is validated by its actual content, not just its file extension.</p>
+  </details>
+  <details class="pf-faq-item">
+    <summary>Can I unlock any password-protected PDF?</summary>
+    <p>The Unlock PDF tool removes a password you already know from a file you own or are authorized to access - it is not a password-cracking tool.</p>
+  </details>
+</div>
+{% endblock %}

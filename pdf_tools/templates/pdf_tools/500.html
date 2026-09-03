@@ -1,0 +1,10 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}Something went wrong - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:100px 0;text-align:center;">
+  <div class="pf-tool-icon" style="margin:0 auto 20px;width:70px;height:70px;font-size:1.8rem;background:#FDEEEE;color:var(--pf-danger);"><i class="fa-solid fa-triangle-exclamation"></i></div>
+  <h1 style="font-weight:800;">Something went wrong</h1>
+  <p style="color:var(--pf-ink-soft);margin-bottom:26px;">We hit an unexpected error processing your request. Please try again in a moment.</p>
+  <a href="{% url 'home' %}" class="btn-pf-primary btn">Back to homepage</a>
+</div>
+{% endblock %}

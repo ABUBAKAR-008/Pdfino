@@ -1,0 +1,25 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Conversion complete!</h3>
+  <p>{{ image_count }} image{{ image_count|pluralize }} generated{% if image_count > 1 %} (packaged as a ZIP){% endif %}.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url tool.slug %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Pages</label>{{ form.scope }}</div>
+    <div class="pf-field">
+      <label>Specific pages (if "Selected pages")</label>
+      {{ form.pages }}
+      <div class="pf-hint">e.g. 1-3, 5</div>
+    </div>
+    <div class="pf-field"><label>Image quality</label>{{ form.quality }}</div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-image"></i>&nbsp; Convert</button>
+  </div>
+</form>
+{% endblock %}

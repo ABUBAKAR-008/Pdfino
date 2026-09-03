@@ -1,0 +1,16 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Text extracted!</h3>
+  <p>{{ result.page_count }} page{{ result.page_count|pluralize }} converted to plain text.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'pdf-to-text' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-lines"></i>&nbsp; Convert to Text</button>
+  </div>
+</form>
+{% endblock %}

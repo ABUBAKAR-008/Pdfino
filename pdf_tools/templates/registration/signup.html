@@ -1,0 +1,32 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}Sign up - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:60px 0;">
+  <div class="pf-panel" style="max-width:440px;">
+    <h2 style="font-weight:800;margin-bottom:6px;text-align:center;">Create your free account</h2>
+    <p style="color:var(--pf-ink-soft);text-align:center;margin-bottom:26px;">Keep a history of your conversions - no account needed to use the tools.</p>
+    {% if form.non_field_errors %}<div class="pf-alert pf-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="pf-options">
+        <div class="pf-field">
+          <label for="{{ form.username.id_for_label }}">Username</label>
+          {{ form.username }}
+          {% for e in form.username.errors %}<div class="pf-hint" style="color:var(--pf-danger);">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="pf-field">
+          <label for="{{ form.password1.id_for_label }}">Password</label>
+          {{ form.password1 }}
+          {% for e in form.password1.errors %}<div class="pf-hint" style="color:var(--pf-danger);">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="pf-field">
+          <label for="{{ form.password2.id_for_label }}">Confirm password</label>
+          {{ form.password2 }}
+        </div>
+      </div>
+      <div class="pf-submit-row"><button type="submit" class="btn-pf-primary btn btn-lg">Create account</button></div>
+    </form>
+    <p style="text-align:center;margin-top:18px;font-size:0.9rem;">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Page numbers added!</h3>
+  <p>{{ result.page_count }} pages numbered.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'page-numbers' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Position</label>{{ form.position }}</div>
+    <div class="pf-field"><label>Start numbering at</label>{{ form.start_at }}</div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-list-ol"></i>&nbsp; Add Page Numbers</button>
+  </div>
+</form>
+{% endblock %}

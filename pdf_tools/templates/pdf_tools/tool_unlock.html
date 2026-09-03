@@ -1,0 +1,23 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF has been unlocked!</h3>
+  <p>The password has been removed from this file.</p>
+{% endblock %}
+{% block form_body %}
+<div class="pf-alert pf-alert-warning">
+  <i class="fa-solid fa-triangle-exclamation"></i>
+  <span>Only unlock PDFs you own or have permission to access.</span>
+</div>
+<form method="post" enctype="multipart/form-data" action="{% url 'unlock-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Current password</label>{{ form.password }}</div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-lock-open"></i>&nbsp; Unlock PDF</button>
+  </div>
+</form>
+{% endblock %}

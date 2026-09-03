@@ -1,0 +1,25 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}Log in - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:60px 0;">
+  <div class="pf-panel" style="max-width:420px;">
+    <h2 style="font-weight:800;margin-bottom:26px;text-align:center;">Log in to Pdfino</h2>
+    {% if form.non_field_errors %}<div class="pf-alert pf-alert-error">{{ form.non_field_errors.0 }}</div>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="pf-options">
+        <div class="pf-field">
+          <label for="id_username">Username</label>
+          <input type="text" name="username" class="form-control" id="id_username" required autofocus>
+        </div>
+        <div class="pf-field">
+          <label for="id_password">Password</label>
+          <input type="password" name="password" class="form-control" id="id_password" required>
+        </div>
+      </div>
+      <div class="pf-submit-row"><button type="submit" class="btn-pf-primary btn btn-lg">Log in</button></div>
+    </form>
+    <p style="text-align:center;margin-top:18px;font-size:0.9rem;">New here? <a href="{% url 'signup' %}">Create an account</a></p>
+  </div>
+</div>
+{% endblock %}

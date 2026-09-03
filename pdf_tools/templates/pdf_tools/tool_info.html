@@ -1,0 +1,34 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block form_body %}
+{% if info %}
+  <div class="pf-result">
+    <div class="pf-result-icon"><i class="fa-solid fa-circle-info"></i></div>
+    <h3>{{ info.file_name }}</h3>
+    <p>{{ info.file_size }}</p>
+  </div>
+  <table class="table">
+    <tbody>
+      <tr><th>Pages</th><td>{{ info.page_count }}</td></tr>
+      <tr><th>Page size</th><td>{{ info.page_width_pt }} x {{ info.page_height_pt }} pt</td></tr>
+      <tr><th>Password protected</th><td>{{ info.is_encrypted|yesno:"Yes,No" }}</td></tr>
+      <tr><th>Contains extractable text</th><td>{{ info.has_text|yesno:"Yes,No (may be scanned)" }}</td></tr>
+      <tr><th>Title</th><td>{{ info.metadata.title|default:"—" }}</td></tr>
+      <tr><th>Author</th><td>{{ info.metadata.author|default:"—" }}</td></tr>
+      <tr><th>Creator</th><td>{{ info.metadata.creator|default:"—" }}</td></tr>
+      <tr><th>Producer</th><td>{{ info.metadata.producer|default:"—" }}</td></tr>
+    </tbody>
+  </table>
+  <div class="pf-submit-row">
+    <a href="{% url 'pdf-info' %}" class="btn-pf-outline btn">Check Another File</a>
+  </div>
+{% else %}
+  <form method="post" enctype="multipart/form-data" action="{% url 'pdf-info' %}" data-ajax-upload>
+    {% csrf_token %}
+    {% include "pdf_tools/_dropzone_single.html" %}
+    {% include "pdf_tools/_progress.html" %}
+    <div class="pf-submit-row">
+      <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-circle-info"></i>&nbsp; Inspect PDF</button>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

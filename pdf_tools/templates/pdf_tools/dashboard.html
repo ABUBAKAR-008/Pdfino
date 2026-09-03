@@ -1,0 +1,40 @@
+{% extends "pdf_tools/base.html" %}
+{% block title %}Dashboard - Pdfino{% endblock %}
+{% block content %}
+<div class="pf-container" style="padding:50px 0;">
+  <h1 style="font-weight:800;margin-bottom:6px;">Welcome back, {{ user.username }}</h1>
+  <p style="color:var(--pf-ink-soft);margin-bottom:30px;">Your recent conversions (only metadata is kept - file contents are never stored here).</p>
+
+  {% if jobs %}
+    <div class="pf-panel" style="max-width:none;padding:0;overflow:hidden;">
+      <table class="table mb-0">
+        <thead><tr><th class="ps-4">Tool</th><th>Status</th><th>Original file</th><th>Date</th><th class="pe-4">Download</th></tr></thead>
+        <tbody>
+        {% for job in jobs %}
+          <tr>
+            <td class="ps-4">{{ job.tool_name }}</td>
+            <td>
+              {% if job.status == 'success' %}<span style="color:var(--pf-success);font-weight:700;">Success</span>
+              {% elif job.status == 'failed' %}<span style="color:var(--pf-danger);font-weight:700;">Failed</span>
+              {% else %}<span style="color:var(--pf-ink-soft);">{{ job.get_status_display }}</span>{% endif %}
+            </td>
+            <td>{{ job.original_filename|default:"—" }}</td>
+            <td>{{ job.created_at|date:"M j, Y g:i A" }}</td>
+            <td class="pe-4">
+              {% if job.status == 'success' and job.result_relpath %}
+                <a href="{% url 'download' job.id %}" class="btn-pf-outline btn btn-sm">Download</a>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="pf-panel" style="text-align:center;">
+      <p style="color:var(--pf-ink-soft);">You haven't processed any files yet.</p>
+      <a href="{% url 'home' %}" class="btn-pf-primary btn">Browse tools</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<div class="pf-dropzone" data-dropzone data-file-list-target="#pf-file-list">
+  <i class="fa-solid fa-cloud-arrow-up pf-drop-icon"></i>
+  <h4>Drag & drop your {{ accept_label|default:"PDF" }} here</h4>
+  <p>or click to browse from your device</p>
+  <input type="file" name="file" accept="{{ accept|default:'.pdf' }}" required>
+</div>
+<div class="pf-file-list" id="pf-file-list"></div>

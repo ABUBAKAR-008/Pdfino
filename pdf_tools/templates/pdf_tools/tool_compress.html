@@ -1,0 +1,26 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF has been compressed!</h3>
+  <p>
+    {{ result.original_size|filesizeformat }} &rarr; {{ result.compressed_size|filesizeformat }}
+    {% if reduction > 0 %}<br><strong style="color:var(--pf-success)">{{ reduction }}% smaller</strong>{% else %}<br>This PDF was already well optimized.{% endif %}
+  </p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'compress-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field">
+      <label>Compression level</label>
+      {{ form.level }}
+      <div class="pf-hint">Higher compression reduces file size further but may lower image quality.</div>
+    </div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-compress"></i>&nbsp; Compress PDF</button>
+  </div>
+</form>
+{% endblock %}

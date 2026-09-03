@@ -1,0 +1,65 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Pages reordered!</h3>
+  <p>{{ result.page_count }} pages saved in your new order.</p>
+{% endblock %}
+{% block form_body %}
+{% if inspected %}
+  <form method="post" action="{% url 'reorder-pages' %}" id="pf-reorder-form">
+    {% csrf_token %}
+    <input type="hidden" name="stage" value="reorder">
+    <input type="hidden" name="file_data" value="{{ file_data }}">
+    <input type="hidden" name="order" id="pf-order-input">
+    <p class="pf-hint"><i class="fa-solid fa-arrows-up-down"></i> Drag tiles to set the new page order for <strong>{{ file_name }}</strong> ({{ page_count }} pages).</p>
+    <div class="pf-page-grid" id="pf-reorder-grid"></div>
+    <div class="pf-submit-row">
+      <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-arrows-up-down"></i>&nbsp; Save New Order</button>
+    </div>
+  </form>
+  <script>
+  (function() {
+    const grid = document.getElementById('pf-reorder-grid');
+    const pageCount = {{ page_count }};
+    let order = [];
+    for (let i = 0; i < pageCount; i++) order.push(i);
+
+    function render() {
+      grid.innerHTML = '';
+      order.forEach(function (pageIdx, pos) {
+        const tile = document.createElement('div');
+        tile.className = 'pf-page-thumb';
+        tile.textContent = pageIdx + 1;
+        tile.setAttribute('draggable', 'true');
+        tile.dataset.pos = pos;
+        tile.addEventListener('dragstart', function () { tile.classList.add('dragging'); dragPos = pos; });
+        tile.addEventListener('dragend', function () { tile.classList.remove('dragging'); });
+        tile.addEventListener('dragover', function (e) { e.preventDefault(); });
+        tile.addEventListener('drop', function (e) {
+          e.preventDefault();
+          const dropPos = parseInt(tile.dataset.pos, 10);
+          if (dragPos === null || dragPos === dropPos) return;
+          const moved = order.splice(dragPos, 1)[0];
+          order.splice(dropPos, 0, moved);
+          render();
+        });
+        grid.appendChild(tile);
+      });
+      document.getElementById('pf-order-input').value = order.join(',');
+    }
+    let dragPos = null;
+    render();
+  })();
+  </script>
+{% else %}
+  <form method="post" enctype="multipart/form-data" action="{% url 'reorder-pages' %}" data-ajax-upload>
+    {% csrf_token %}
+    <input type="hidden" name="stage" value="inspect">
+    {% include "pdf_tools/_dropzone_single.html" %}
+    {% include "pdf_tools/_progress.html" %}
+    <div class="pf-submit-row">
+      <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-upload"></i>&nbsp; Upload PDF</button>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

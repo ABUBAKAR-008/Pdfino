@@ -1,0 +1,24 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF is ready!</h3>
+  <p>{{ result.page_count }} image{{ result.page_count|pluralize }} combined into one PDF.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url tool.slug %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_multi.html" with accept=".jpg,.jpeg,.png" accept_label="images" field_name="files" %}
+  <div class="pf-options">
+    <div class="row g-3">
+      <div class="col-6"><div class="pf-field"><label>Page size</label>{{ form.page_size }}</div></div>
+      <div class="col-6"><div class="pf-field"><label>Orientation</label>{{ form.orientation }}</div></div>
+      <div class="col-6"><div class="pf-field"><label>Margin (mm)</label>{{ form.margin_mm }}</div></div>
+      <div class="col-6"><div class="pf-field"><label>Image fit</label>{{ form.fit }}</div></div>
+    </div>
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-pdf"></i>&nbsp; Convert to PDF</button>
+  </div>
+</form>
+{% endblock %}

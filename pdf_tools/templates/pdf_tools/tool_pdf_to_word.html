@@ -1,0 +1,20 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your Word document is ready!</h3>
+  <p>{{ result.page_count }} page{{ result.page_count|pluralize }} converted, fully editable.</p>
+  {% if result.warning %}
+    <div class="pf-alert pf-alert-warning" style="text-align:left;"><i class="fa-solid fa-triangle-exclamation"></i><span>{{ result.warning }}</span></div>
+  {% endif %}
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'pdf-to-word' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-file-word"></i>&nbsp; Convert to Word</button>
+  </div>
+</form>
+<p class="pf-hint" style="text-align:center;margin-top:16px;">Preserves paragraphs, headings, tables, images and formatting. Scanned pages (images only) can't be made editable without OCR.</p>
+{% endblock %}

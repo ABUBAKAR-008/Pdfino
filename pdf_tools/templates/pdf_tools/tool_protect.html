@@ -1,0 +1,23 @@
+{% extends "pdf_tools/tool_base.html" %}
+{% block result_body %}
+  <div class="pf-result-icon"><i class="fa-solid fa-check"></i></div>
+  <h3>Your PDF is now password protected!</h3>
+  <p>Keep your password safe - Pdfino does not store it and cannot recover it for you.</p>
+{% endblock %}
+{% block form_body %}
+<form method="post" enctype="multipart/form-data" action="{% url 'protect-pdf' %}" data-ajax-upload>
+  {% csrf_token %}
+  {% include "pdf_tools/_dropzone_single.html" %}
+  <div class="pf-options">
+    <div class="pf-field"><label>Password</label>{{ form.password }}</div>
+    <div class="pf-field"><label>Confirm password</label>{{ form.confirm_password }}</div>
+    {% if form.non_field_errors %}
+      <div class="pf-alert pf-alert-error">{{ form.non_field_errors.0 }}</div>
+    {% endif %}
+  </div>
+  {% include "pdf_tools/_progress.html" %}
+  <div class="pf-submit-row">
+    <button type="submit" class="btn-pf-primary btn btn-lg"><i class="fa-solid fa-lock"></i>&nbsp; Protect PDF</button>
+  </div>
+</form>
+{% endblock %}
