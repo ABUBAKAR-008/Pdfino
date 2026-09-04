@@ -4,6 +4,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 from .exceptions import ProcessingError
+from .processing_guard import guarded
 
 logger = logging.getLogger('pdf_tools')
 
@@ -15,6 +16,7 @@ _LEVELS = {
 }
 
 
+@guarded
 def compress_pdf(pdf_path: Path, output_path: Path, level: str = 'medium') -> dict:
     if level not in _LEVELS:
         level = 'medium'

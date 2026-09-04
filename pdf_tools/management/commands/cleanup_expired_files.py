@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from pdf_tools.models import ConversionJob
+from pdf_tools.models import ConversionJob, StagedDocument
 from pdf_tools.utils.files import cleanup_dir
 
 
@@ -30,12 +30,24 @@ class Command(BaseCommand):
         )
         removed = 0
         for job in expired_jobs:
-            path = Path(settings.OUTPUT_TMP_DIR) / job.result_relpath
-            cleanup_dir(path.parent)
+            root = Path(settings.OUTPUT_TMP_DIR).resolve()
+            path = (root / job.result_relpath).resolve()
+            if root in path.parents and path.parent != root:
+                cleanup_dir(path.parent)
             job.result_relpath = ''
             job.result_filename = ''
             job.save(update_fields=['result_relpath', 'result_filename'])
             removed += 1
+
+        expired_staging = StagedDocument.objects.filter(expires_at__lt=now)
+        staged_removed = 0
+        for staged in expired_staging:
+            root = Path(settings.STAGING_TMP_DIR).resolve()
+            path = (root / staged.relpath).resolve()
+            if root in path.parents and path.parent != root:
+                cleanup_dir(path.parent)
+            staged.delete()
+            staged_removed += 1
 
         # Safety net: remove any leftover directories older than 2x the
         # retention window, regardless of DB state (covers crashed requests).
@@ -51,5 +63,6 @@ class Command(BaseCommand):
                     stale_dirs += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f'Cleaned {removed} expired job(s) and {stale_dirs} stale temp folder(s).'
+            f'Cleaned {removed} expired job(s), {staged_removed} staged document(s), '
+            f'and {stale_dirs} stale temp folder(s).'
         ))

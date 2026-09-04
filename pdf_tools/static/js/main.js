@@ -4,13 +4,38 @@
   // ---------------- Theme toggle ----------------
   const themeToggle = document.querySelector('[data-theme-toggle]');
   const root = document.documentElement;
-  const savedTheme = window.localStorage ? null : null; // no localStorage per policy; session-only via data attr
+  const themeCookieName = 'pdfino_theme';
+
+  function readThemeCookie() {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + themeCookieName + '=([^;]*)'));
+    const requestedTheme = match ? decodeURIComponent(match[1]) : 'dark';
+    return requestedTheme === 'light' ? 'light' : 'dark';
+  }
+
+  function saveThemeCookie(theme) {
+    document.cookie = themeCookieName + '=' + encodeURIComponent(theme) +
+      '; Max-Age=31536000; Path=/; SameSite=Lax' +
+      (window.location.protocol === 'https:' ? '; Secure' : '');
+  }
+
+  function applyTheme(theme) {
+    const isDark = theme === 'dark';
+    root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const icon = themeToggle && themeToggle.querySelector('i');
+    if (icon) icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    if (themeToggle) {
+      themeToggle.setAttribute('aria-pressed', String(isDark));
+      themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+  }
+
+  applyTheme(readThemeCookie());
   if (themeToggle) {
     themeToggle.addEventListener('click', function () {
       const isDark = root.getAttribute('data-theme') === 'dark';
-      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
-      const icon = themeToggle.querySelector('i');
-      if (icon) icon.className = isDark ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+      const nextTheme = isDark ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      saveThemeCookie(nextTheme);
     });
   }
 
@@ -70,13 +95,31 @@
         item.className = 'pf-file-item';
         item.setAttribute('draggable', multiple ? 'true' : 'false');
         item.dataset.index = idx;
-        item.innerHTML =
-          (multiple ? '<i class="fa-solid fa-grip-vertical pf-drag-handle"></i>' : '') +
-          '<i class="fa-solid ' + iconFor(file.name) + ' pf-file-icon"></i>' +
-          '<span class="pf-file-name">' + file.name + '</span>' +
-          '<span class="pf-file-size">' + humanSize(file.size) + '</span>' +
-          '<button type="button" class="pf-file-remove" aria-label="Remove file" data-remove="' + idx + '">' +
-          '<i class="fa-solid fa-xmark"></i></button>';
+        if (multiple) {
+          const handle = document.createElement('i');
+          handle.className = 'fa-solid fa-grip-vertical pf-drag-handle';
+          item.appendChild(handle);
+        }
+        const fileIcon = document.createElement('i');
+        fileIcon.className = 'fa-solid ' + iconFor(file.name) + ' pf-file-icon';
+        item.appendChild(fileIcon);
+        const name = document.createElement('span');
+        name.className = 'pf-file-name';
+        name.textContent = file.name;
+        item.appendChild(name);
+        const size = document.createElement('span');
+        size.className = 'pf-file-size';
+        size.textContent = humanSize(file.size);
+        item.appendChild(size);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'pf-file-remove';
+        remove.setAttribute('aria-label', 'Remove file');
+        remove.dataset.remove = idx;
+        const removeIcon = document.createElement('i');
+        removeIcon.className = 'fa-solid fa-xmark';
+        remove.appendChild(removeIcon);
+        item.appendChild(remove);
         listEl.appendChild(item);
       });
       syncInputFiles();

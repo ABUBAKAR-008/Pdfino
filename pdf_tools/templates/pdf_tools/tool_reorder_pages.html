@@ -9,7 +9,7 @@
   <form method="post" action="{% url 'reorder-pages' %}" id="pf-reorder-form">
     {% csrf_token %}
     <input type="hidden" name="stage" value="reorder">
-    <input type="hidden" name="file_data" value="{{ file_data }}">
+    <input type="hidden" name="staging_id" value="{{ staging_id }}">
     <input type="hidden" name="order" id="pf-order-input">
     <p class="pf-hint"><i class="fa-solid fa-arrows-up-down"></i> Drag tiles to set the new page order for <strong>{{ file_name }}</strong> ({{ page_count }} pages).</p>
     <div class="pf-page-grid" id="pf-reorder-grid"></div>

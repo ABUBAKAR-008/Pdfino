@@ -3,6 +3,7 @@ import logging
 import zipfile
 from pathlib import Path
 
+import fitz
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login as auth_login
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import redirect, render
+from django.core import signing
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -19,6 +21,7 @@ from .services import conversion, editing, organization, optimization, security 
 from .services.exceptions import ProcessingError
 from .tool_registry import TOOLS, TOOLS_BY_SLUG, tools_by_category
 from .utils import files as file_utils
+from .utils import staging
 from .utils.pages import PageRangeError, parse_page_ranges
 
 logger = logging.getLogger('pdf_tools')
@@ -53,18 +56,63 @@ def _finish_job(job, *, result_path: Path | None, original_size=0, original_file
         job.status = ConversionJob.Status.FAILED
         job.error_message = str(error)[:500]
     else:
+        try:
+            path = _validate_output(result_path, job.tool_slug)
+        except ProcessingError as exc:
+            if result_path:
+                root = Path(settings.OUTPUT_TMP_DIR).resolve()
+                candidate_parent = Path(result_path).resolve().parent
+                if root in candidate_parent.parents and candidate_parent != root:
+                    file_utils.cleanup_dir(candidate_parent)
+            job.status = ConversionJob.Status.FAILED
+            job.error_message = str(exc)[:500]
+            job.save()
+            raise
         job.status = ConversionJob.Status.SUCCESS
         job.original_size_bytes = original_size
-        if result_path is not None and Path(result_path).exists():
-            job.result_filename = Path(result_path).name
-            job.result_size_bytes = Path(result_path).stat().st_size
-            try:
-                job.result_relpath = str(Path(result_path).relative_to(settings.OUTPUT_TMP_DIR))
-            except Exception:
-                job.result_relpath = ''
+        job.result_filename = path.name
+        job.result_size_bytes = path.stat().st_size
+        job.result_relpath = str(path.relative_to(Path(settings.OUTPUT_TMP_DIR).resolve()))
         from datetime import timedelta
         job.expires_at = timezone.now() + timedelta(minutes=settings.FILE_RETENTION_MINUTES)
+        if job.user_id is None:
+            job.download_token = signing.TimestampSigner(salt='pdfino-download').sign(str(job.id))
     job.save()
+
+
+def _validate_output(result_path, tool_slug):
+    if result_path is None:
+        raise ProcessingError('The conversion did not produce a result file.')
+    root = Path(settings.OUTPUT_TMP_DIR).resolve()
+    path = Path(result_path).resolve()
+    if root not in path.parents or not path.is_file():
+        raise ProcessingError('The conversion produced an invalid result.')
+    size = path.stat().st_size
+    if size == 0 or size > settings.MAX_OUTPUT_SIZE:
+        raise ProcessingError('The result file is empty or exceeds the configured size limit.')
+    expected = path.suffix.lower()
+    header = path.read_bytes()[:8]
+    valid = {
+        '.pdf': header.startswith(b'%PDF-'),
+        '.docx': header.startswith(b'PK'),
+        '.zip': header.startswith(b'PK'),
+        '.jpg': header.startswith(b'\xff\xd8\xff'),
+        '.jpeg': header.startswith(b'\xff\xd8\xff'),
+        '.png': header.startswith(b'\x89PNG\r\n\x1a\n'),
+        '.txt': True,
+    }.get(expected, False)
+    if not valid:
+        raise ProcessingError('The conversion produced an unexpected file type.')
+    if expected == '.pdf':
+        try:
+            doc = fitz.open(path)
+            pages = doc.page_count
+            doc.close()
+        except Exception as exc:
+            raise ProcessingError('The conversion produced an invalid PDF.') from exc
+        if pages == 0 or pages > settings.MAX_OUTPUT_PAGES:
+            raise ProcessingError('The conversion produced too many output pages.')
+    return path
 
 
 def _tool_context(slug, **extra):
@@ -82,10 +130,30 @@ def _render_tool(request, slug, template_name, extra=None, status=200):
 
 def _serve_download(request, job_id, filename):
     job = _get_job_or_404(job_id)
+    if job.user_id is not None:
+        if not request.user.is_authenticated or request.user.id != job.user_id:
+            raise Http404('File not found.')
+    else:
+        token = request.GET.get('token', '')
+        try:
+            token_job_id = signing.TimestampSigner(salt='pdfino-download').unsign(
+                token, max_age=settings.DOWNLOAD_TOKEN_MAX_AGE
+            )
+        except signing.BadSignature:
+            raise Http404('File not found.')
+        if token_job_id != str(job.id):
+            raise Http404('File not found.')
     if job.status != ConversionJob.Status.SUCCESS or not job.result_relpath:
         raise Http404('This file is not available (it may have expired).')
+    if job.expires_at and job.expires_at <= timezone.now():
+        raise Http404('This file has expired and was automatically removed. Please process it again.')
     path = Path(settings.OUTPUT_TMP_DIR) / job.result_relpath
-    if not path.exists():
+    try:
+        path = path.resolve()
+        path.relative_to(Path(settings.OUTPUT_TMP_DIR).resolve())
+    except ValueError:
+        raise Http404('File not found.')
+    if not path.is_file():
         raise Http404('This file has expired and was automatically removed. Please process it again.')
     response = FileResponse(open(path, 'rb'), as_attachment=True, filename=filename or path.name)
     return response
@@ -178,9 +246,12 @@ def merge_pdf(request):
     if len(uploaded) < 2:
         return _render_tool(request, slug, 'pdf_tools/tool_merge.html',
                              {'error': 'Please upload at least two PDF files.'}, status=400)
-    if len(uploaded) > 30:
+    if len(uploaded) > settings.MAX_UPLOAD_FILES:
         return _render_tool(request, slug, 'pdf_tools/tool_merge.html',
-                             {'error': 'You can merge up to 30 files at a time.'}, status=400)
+                             {'error': f'You can merge up to {settings.MAX_UPLOAD_FILES} files at a time.'}, status=400)
+    if sum(f.size for f in uploaded) > settings.MAX_TOTAL_UPLOAD_SIZE:
+        return _render_tool(request, slug, 'pdf_tools/tool_merge.html',
+                             {'error': 'The combined upload size is too large.'}, status=400)
 
     job = _start_job(request, slug)
     upload_dir = file_utils.new_upload_dir()
@@ -398,38 +469,29 @@ def reorder_pages(request):
         if not upload:
             return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html',
                                  {'error': 'Please upload a PDF.'}, status=400)
-        upload_dir = file_utils.new_upload_dir()
         try:
-            file_utils.validate_pdf_upload(upload)
-            pdf_path = file_utils.save_upload(upload, upload_dir, 'pdf')
+            staged = staging.stage_upload(request, upload)
+            pdf_path = Path(settings.STAGING_TMP_DIR) / staged.relpath
             page_count = organization.get_page_count(pdf_path)
-            upload.seek(0)
-            import base64
-            encoded = base64.b64encode(upload.read()).decode('ascii')
             return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html', {
                 'inspected': True, 'page_count': page_count,
-                'file_data': encoded, 'file_name': upload.name,
+                'staging_id': staged.token, 'file_name': staged.original_filename,
             })
         except (ProcessingError, file_utils.UnsafeFileError) as exc:
             return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html', {'error': str(exc)}, status=400)
-        finally:
-            file_utils.cleanup_dir(upload_dir)
 
     # stage == 'reorder'
     order_raw = request.POST.get('order', '')
-    file_data = request.POST.get('file_data', '')
-    if not order_raw or not file_data:
+    staging_id = request.POST.get('staging_id', '')
+    staged_data = staging.get_staged(request, staging_id)
+    if not order_raw or not staged_data:
         return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html',
                              {'error': 'Please arrange every page before saving.'}, status=400)
 
     job = _start_job(request, slug)
-    upload_dir = file_utils.new_upload_dir()
     output_dir = file_utils.new_output_dir()
+    staged, pdf_path = staged_data
     try:
-        import base64
-        raw = base64.b64decode(file_data)
-        pdf_path = upload_dir / file_utils.random_name('pdf')
-        pdf_path.write_bytes(raw)
         try:
             new_order = [int(x) for x in order_raw.split(',') if x.strip() != '']
         except ValueError:
@@ -437,7 +499,8 @@ def reorder_pages(request):
 
         out_path = output_dir / 'Pdfino_reordered.pdf'
         result = organization.reorder_pages(pdf_path, out_path, new_order)
-        _finish_job(job, result_path=out_path, original_size=len(raw))
+        _finish_job(job, result_path=out_path, original_size=staged.size_bytes, original_filename=staged.original_filename)
+        staging.delete_staged(staged)
         return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html', {'success': True, 'job': job, 'result': result})
     except (ProcessingError, file_utils.UnsafeFileError) as exc:
         _finish_job(job, result_path=None, error=exc)
@@ -450,7 +513,7 @@ def reorder_pages(request):
         return _render_tool(request, slug, 'pdf_tools/tool_reorder_pages.html',
                              {'error': 'Something went wrong while reordering your PDF.'}, status=500)
     finally:
-        file_utils.cleanup_dir(upload_dir)
+        pass
 
 
 # ---------------------------------------------------------------------
@@ -676,42 +739,33 @@ def edit_metadata(request):
     if stage == 'inspect':
         if not upload:
             return _render_tool(request, slug, 'pdf_tools/tool_metadata.html', {'form': forms.MetadataForm(), 'error': 'Please upload a PDF.'}, status=400)
-        upload_dir = file_utils.new_upload_dir()
         try:
-            file_utils.validate_pdf_upload(upload)
-            pdf_path = file_utils.save_upload(upload, upload_dir, 'pdf')
+            staged = staging.stage_upload(request, upload)
+            pdf_path = Path(settings.STAGING_TMP_DIR) / staged.relpath
             meta = sec.get_metadata(pdf_path)
-            # Re-read the file into memory so it can be resubmitted with the save step
-            upload.seek(0)
-            import base64
-            encoded = base64.b64encode(upload.read()).decode('ascii')
             form = forms.MetadataForm(initial=meta)
             return _render_tool(request, slug, 'pdf_tools/tool_metadata.html', {
-                'form': form, 'inspected': True, 'file_data': encoded, 'file_name': upload.name,
+                'form': form, 'inspected': True, 'staging_id': staged.token,
+                'file_name': staged.original_filename,
             })
         except (ProcessingError, file_utils.UnsafeFileError) as exc:
             return _render_tool(request, slug, 'pdf_tools/tool_metadata.html', {'form': forms.MetadataForm(), 'error': str(exc)}, status=400)
-        finally:
-            file_utils.cleanup_dir(upload_dir)
 
     # stage == 'save'
     form = forms.MetadataForm(request.POST)
-    file_data = request.POST.get('file_data', '')
-    file_name = request.POST.get('file_name', 'document.pdf')
-    if not form.is_valid() or not file_data:
+    staging_id = request.POST.get('staging_id', '')
+    staged_data = staging.get_staged(request, staging_id)
+    if not form.is_valid() or not staged_data:
         return _render_tool(request, slug, 'pdf_tools/tool_metadata.html', {'form': form, 'error': 'Please fix the errors below.'}, status=400)
 
     job = _start_job(request, slug)
     output_dir = file_utils.new_output_dir()
-    upload_dir = file_utils.new_upload_dir()
+    staged, pdf_path = staged_data
     try:
-        import base64
-        raw = base64.b64decode(file_data)
-        pdf_path = upload_dir / file_utils.random_name('pdf')
-        pdf_path.write_bytes(raw)
         out_path = output_dir / 'Pdfino_metadata.pdf'
         sec.set_metadata(pdf_path, out_path, form.cleaned_data)
-        _finish_job(job, result_path=out_path, original_size=len(raw))
+        _finish_job(job, result_path=out_path, original_size=staged.size_bytes, original_filename=staged.original_filename)
+        staging.delete_staged(staged)
         return _render_tool(request, slug, 'pdf_tools/tool_metadata.html', {'success': True, 'job': job})
     except ProcessingError as exc:
         _finish_job(job, result_path=None, error=exc)
@@ -724,7 +778,7 @@ def edit_metadata(request):
         return _render_tool(request, slug, 'pdf_tools/tool_metadata.html',
                              {'form': form, 'error': 'Something went wrong while saving metadata.'}, status=500)
     finally:
-        file_utils.cleanup_dir(upload_dir)
+        pass
 
 
 # ---------------------------------------------------------------------
@@ -926,8 +980,14 @@ def _image_to_pdf_view(request, slug, template):
     uploaded = request.FILES.getlist('files')
     if not uploaded or not form.is_valid():
         return _render_tool(request, slug, template, {'form': form, 'error': 'Please add at least one image.'}, status=400)
-    if len(uploaded) > 50:
-        return _render_tool(request, slug, template, {'form': form, 'error': 'You can convert up to 50 images at once.'}, status=400)
+    if len(uploaded) > settings.MAX_UPLOAD_FILES:
+        return _render_tool(request, slug, template, {
+            'form': form, 'error': f'You can convert up to {settings.MAX_UPLOAD_FILES} images at once.'
+        }, status=400)
+    if sum(f.size for f in uploaded) > settings.MAX_TOTAL_UPLOAD_SIZE:
+        return _render_tool(request, slug, template, {
+            'form': form, 'error': 'The combined upload size is too large.'
+        }, status=400)
 
     job = _start_job(request, slug)
     upload_dir = file_utils.new_upload_dir()

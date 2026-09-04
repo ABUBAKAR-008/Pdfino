@@ -8,6 +8,7 @@ Rules enforced here:
 - Keep every temp file inside MEDIA_ROOT/uploads or MEDIA_ROOT/outputs - never
   let user input influence the directory path (blocks path traversal).
 """
+import io
 import mimetypes
 import os
 import re
@@ -18,6 +19,10 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+import fitz
+from PIL import Image
+
+Image.MAX_IMAGE_PIXELS = settings.MAX_IMAGE_PIXELS
 
 # Magic-byte signatures for the formats Pdfino accepts as input.
 _SIGNATURES = {
@@ -97,6 +102,18 @@ def validate_image_upload(django_file, max_size=None):
     kind = sniff_kind(django_file)
     if kind not in ('jpg', 'png'):
         raise UnsafeFileError('Only JPG and PNG images are supported.')
+    try:
+        image_bytes = django_file.read()
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            width, height = image.size
+    except Exception as exc:
+        django_file.seek(0)
+        raise UnsafeFileError('This image is too large or could not be read safely.') from exc
+    django_file.seek(0)
+    if width * height > settings.MAX_IMAGE_PIXELS:
+        raise UnsafeFileError(
+            f'Image dimensions are too large. Maximum is {settings.MAX_IMAGE_PIXELS:,} pixels.'
+        )
     return True
 
 
@@ -106,6 +123,29 @@ def save_upload(django_file, directory: Path, extension: str) -> Path:
     with open(dest, 'wb') as out:
         for chunk in django_file.chunks():
             out.write(chunk)
+    try:
+        if extension.lower().lstrip('.') == 'pdf':
+            doc = fitz.open(dest)
+            page_count = doc.page_count
+            doc.close()
+            if page_count == 0:
+                raise UnsafeFileError('This PDF has no pages to process.')
+            if page_count > settings.MAX_PDF_PAGES:
+                raise UnsafeFileError(
+                    f'This PDF has too many pages. Maximum allowed is {settings.MAX_PDF_PAGES:,}.'
+                )
+        elif extension.lower().lstrip('.') in ('jpg', 'png'):
+            with Image.open(dest) as image:
+                if image.width * image.height > settings.MAX_IMAGE_PIXELS:
+                    raise UnsafeFileError(
+                        f'Image dimensions are too large. Maximum is {settings.MAX_IMAGE_PIXELS:,} pixels.'
+                    )
+    except UnsafeFileError:
+        dest.unlink(missing_ok=True)
+        raise
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning, Exception) as exc:
+        dest.unlink(missing_ok=True)
+        raise UnsafeFileError('The uploaded file could not be read safely.') from exc
     return dest
 
 

@@ -8,6 +8,7 @@ env/
 staticfiles/
 media/uploads/*
 media/outputs/*
+media/staging/*
 !media/uploads/.gitkeep
 !media/outputs/.gitkeep
 logs/*.log

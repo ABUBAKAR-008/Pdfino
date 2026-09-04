@@ -4,6 +4,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 from .exceptions import ProcessingError
+from .processing_guard import guarded
 
 logger = logging.getLogger('pdf_tools')
 
@@ -27,6 +28,7 @@ def _open(path: Path):
     return doc
 
 
+@guarded
 def watermark_pdf(pdf_path: Path, output_path: Path, text: str, *, font_size: int = 40,
                    opacity: float = 0.3, rotation: int = 45, color: tuple = (0.5, 0.5, 0.5),
                    position: str = 'center', page_indices: list[int] | None = None) -> dict:
@@ -61,6 +63,7 @@ def watermark_pdf(pdf_path: Path, output_path: Path, text: str, *, font_size: in
     return {'pages_watermarked': len(targets)}
 
 
+@guarded
 def add_page_numbers(pdf_path: Path, output_path: Path, *, position: str = 'bottom-right',
                       start_at: int = 1, font_size: int = 11) -> dict:
     doc = _open(pdf_path)
@@ -83,6 +86,7 @@ def add_page_numbers(pdf_path: Path, output_path: Path, *, position: str = 'bott
     return {'page_count': total}
 
 
+@guarded
 def get_pdf_info(pdf_path: Path) -> dict:
     doc = _open(pdf_path)
     try:
@@ -100,6 +104,7 @@ def get_pdf_info(pdf_path: Path) -> dict:
     return info
 
 
+@guarded
 def render_thumbnails(pdf_path: Path, output_dir: Path, *, max_pages: int = 60, dpi: int = 60) -> list[Path]:
     """Small page thumbnails used by the page-management / preview UI."""
     doc = _open(pdf_path)

@@ -73,3 +73,20 @@ class Profile(models.Model):
 
     def __str__(self):
         return f'Profile<{self.user.username}>'
+
+
+class StagedDocument(models.Model):
+    token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.CASCADE, related_name='staged_documents',
+    )
+    session_key = models.CharField(max_length=40, blank=True)
+    relpath = models.CharField(max_length=255)
+    original_filename = models.CharField(max_length=255, blank=True)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f'StagedDocument<{self.token}>'

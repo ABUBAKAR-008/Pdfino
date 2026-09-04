@@ -4,6 +4,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 from .exceptions import ProcessingError
+from .processing_guard import guarded
 
 logger = logging.getLogger('pdf_tools')
 
@@ -19,6 +20,7 @@ def _open(path: Path):
     return doc
 
 
+@guarded
 def merge_pdfs(pdf_paths: list[Path], output_path: Path) -> dict:
     if len(pdf_paths) < 2:
         raise ProcessingError('Please add at least two PDF files to merge.')
@@ -44,6 +46,7 @@ def merge_pdfs(pdf_paths: list[Path], output_path: Path) -> dict:
     return {'file_count': len(pdf_paths)}
 
 
+@guarded
 def split_by_ranges(pdf_path: Path, ranges: list[list[int]], output_dir: Path) -> list[Path]:
     """ranges: list of 0-based page-index lists, one per output file."""
     doc = _open(pdf_path)
@@ -65,6 +68,7 @@ def split_by_ranges(pdf_path: Path, ranges: list[list[int]], output_dir: Path) -
     return out_paths
 
 
+@guarded
 def split_every_page(pdf_path: Path, output_dir: Path) -> list[Path]:
     doc = _open(pdf_path)
     total = doc.page_count
@@ -73,6 +77,7 @@ def split_every_page(pdf_path: Path, output_dir: Path) -> list[Path]:
     return split_by_ranges(pdf_path, ranges, output_dir)
 
 
+@guarded
 def rotate_pdf(pdf_path: Path, output_path: Path, degrees: int, page_indices: list[int] | None) -> dict:
     if degrees % 90 != 0:
         raise ProcessingError('Rotation must be 90, 180 or 270 degrees.')
@@ -93,6 +98,7 @@ def rotate_pdf(pdf_path: Path, output_path: Path, degrees: int, page_indices: li
     return {'rotated_pages': len(targets)}
 
 
+@guarded
 def delete_pages(pdf_path: Path, output_path: Path, page_indices: list[int]) -> dict:
     doc = _open(pdf_path)
     try:
@@ -111,6 +117,7 @@ def delete_pages(pdf_path: Path, output_path: Path, page_indices: list[int]) -> 
     return {'remaining_pages': remaining}
 
 
+@guarded
 def extract_pages(pdf_path: Path, output_path: Path, page_indices: list[int]) -> dict:
     doc = _open(pdf_path)
     try:
@@ -127,6 +134,7 @@ def extract_pages(pdf_path: Path, output_path: Path, page_indices: list[int]) ->
     return {'extracted_pages': len(page_indices)}
 
 
+@guarded
 def reorder_pages(pdf_path: Path, output_path: Path, new_order: list[int]) -> dict:
     """new_order is a full permutation of 0-based page indices in the desired final order."""
     doc = _open(pdf_path)
@@ -145,6 +153,7 @@ def reorder_pages(pdf_path: Path, output_path: Path, new_order: list[int]) -> di
     return {'page_count': len(new_order)}
 
 
+@guarded
 def get_page_count(pdf_path: Path) -> int:
     doc = _open(pdf_path)
     n = doc.page_count

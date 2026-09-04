@@ -4,10 +4,12 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 from .exceptions import ProcessingError
+from .processing_guard import guarded
 
 logger = logging.getLogger('pdf_tools')
 
 
+@guarded
 def protect_pdf(pdf_path: Path, output_path: Path, password: str) -> dict:
     if not password or len(password) < 4:
         raise ProcessingError('Please choose a password with at least 4 characters.')
@@ -41,6 +43,7 @@ def protect_pdf(pdf_path: Path, output_path: Path, password: str) -> dict:
     return {}
 
 
+@guarded
 def unlock_pdf(pdf_path: Path, output_path: Path, password: str) -> dict:
     try:
         doc = fitz.open(pdf_path)
@@ -66,6 +69,7 @@ def unlock_pdf(pdf_path: Path, output_path: Path, password: str) -> dict:
     return {}
 
 
+@guarded
 def get_metadata(pdf_path: Path) -> dict:
     try:
         doc = fitz.open(pdf_path)
@@ -86,6 +90,7 @@ def get_metadata(pdf_path: Path) -> dict:
     }
 
 
+@guarded
 def set_metadata(pdf_path: Path, output_path: Path, fields: dict) -> dict:
     try:
         doc = fitz.open(pdf_path)

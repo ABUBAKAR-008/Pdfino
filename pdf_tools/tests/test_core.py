@@ -7,12 +7,29 @@ themselves (built with PyMuPDF/reportlab test fixtures generated on the fly).
 View-level tests use Django's test client to exercise the full request cycle.
 """
 import io
+import os
+import subprocess
+import sys
+import time
+from datetime import timedelta
 from pathlib import Path
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core import signing
+from django.contrib.sessions.backends.db import SessionStore
+from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from pdf_tools.models import ConversionJob, StagedDocument
+from pdf_tools.services.exceptions import ProcessingError
+from pdf_tools.services.processing_guard import ProcessingAdmission, run_with_timeout
+from pdf_tools.utils import staging
+from pdf_tools.utils import files as file_utils
 from pdf_tools.utils.files import UnsafeFileError, validate_image_upload, validate_pdf_upload
 from pdf_tools.utils.pages import PageRangeError, parse_page_ranges
 
@@ -91,6 +108,12 @@ class FileValidationTests(TestCase):
 
     def test_non_image_rejected(self):
         f = SimpleUploadedFile('img.jpg', b'definitely not an image', content_type='image/jpeg')
+        with self.assertRaises(UnsafeFileError):
+            validate_image_upload(f)
+
+    @override_settings(MAX_IMAGE_PIXELS=100)
+    def test_large_dimension_image_rejected(self):
+        f = SimpleUploadedFile('large.png', make_image_bytes('PNG', size=(20, 20)), content_type='image/png')
         with self.assertRaises(UnsafeFileError):
             validate_image_upload(f)
 
@@ -324,3 +347,165 @@ class ViewSmokeTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         resp2 = self.client.get(reverse('dashboard'))
         self.assertEqual(resp2.status_code, 200)
+
+
+class DownloadAuthorizationTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.user_a = self.User.objects.create_user('download-a', password='strong-password-1')
+        self.user_b = self.User.objects.create_user('download-b', password='strong-password-1')
+
+    def make_job(self, user=None, status=ConversionJob.Status.SUCCESS, expires=None, with_file=True):
+        job = ConversionJob.objects.create(
+            user=user, tool_slug='text-to-pdf', tool_name='Text to PDF', status=status,
+            expires_at=expires or timezone.now() + timedelta(minutes=10),
+            result_filename='result.txt',
+        )
+        if with_file:
+            output_dir = Path(settings.OUTPUT_TMP_DIR) / f'test-{job.id}'
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / 'result.txt').write_text('result', encoding='utf-8')
+            job.result_relpath = str((output_dir / 'result.txt').relative_to(settings.OUTPUT_TMP_DIR))
+            job.save(update_fields=['result_relpath'])
+        return job
+
+    def test_owner_can_download_own_result(self):
+        job = self.make_job(self.user_a)
+        self.client.force_login(self.user_a)
+        self.assertEqual(self.client.get(reverse('download', args=[job.id])).status_code, 200)
+
+    def test_user_cannot_download_another_users_result(self):
+        job = self.make_job(self.user_a)
+        self.client.force_login(self.user_b)
+        self.assertEqual(self.client.get(reverse('download', args=[job.id])).status_code, 404)
+
+    def test_anonymous_result_requires_valid_signed_token(self):
+        job = self.make_job()
+        token = signing.TimestampSigner(salt='pdfino-download').sign(str(job.id))
+        self.assertEqual(self.client.get(reverse('download', args=[job.id]), {'token': token}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('download', args=[job.id]), {'token': 'tampered'}).status_code, 404)
+
+    def test_expired_token_and_job_are_rejected(self):
+        job = self.make_job(expires=timezone.now() - timedelta(seconds=1))
+        token = signing.TimestampSigner(salt='pdfino-download').sign(str(job.id))
+        self.assertEqual(self.client.get(reverse('download', args=[job.id]), {'token': token}).status_code, 404)
+
+    def test_failed_and_missing_results_are_rejected(self):
+        failed = self.make_job(status=ConversionJob.Status.FAILED, with_file=False)
+        self.assertEqual(self.client.get(reverse('download', args=[failed.id])).status_code, 404)
+        missing = self.make_job(with_file=False)
+        self.assertEqual(self.client.get(reverse('download', args=[missing.id])).status_code, 404)
+
+
+class StagingSecurityTests(TestCase):
+    def request(self, user=None, session=None):
+        request = RequestFactory().post('/reorder-pages/')
+        session = session or SessionStore()
+        if not session.session_key:
+            session.save()
+        request.session = session
+        request.user = user or AnonymousUser()
+        return request
+
+    def test_staging_is_bound_to_anonymous_session_and_expires(self):
+        upload = SimpleUploadedFile('stage.pdf', make_pdf_bytes(1), content_type='application/pdf')
+        first_session = SessionStore()
+        first = self.request(session=first_session)
+        staged = staging.stage_upload(first, upload)
+        self.assertIsNotNone(staging.get_staged(first, str(staged.token)))
+        self.assertIsNone(staging.get_staged(first, 'not-a-staging-id'))
+        self.assertIsNone(staging.get_staged(first, '00000000-0000-0000-0000-000000000001'))
+        other = self.request()
+        self.assertIsNone(staging.get_staged(other, str(staged.token)))
+        staged.expires_at = timezone.now() - timedelta(seconds=1)
+        staged.save(update_fields=['expires_at'])
+        self.assertIsNone(staging.get_staged(first, str(staged.token)))
+
+    def test_staging_is_bound_to_authenticated_user_and_cleanup_deletes_file(self):
+        user_a = get_user_model().objects.create_user('stage-a', password='strong-password-1')
+        user_b = get_user_model().objects.create_user('stage-b', password='strong-password-1')
+        request_a = self.request(user_a)
+        staged = staging.stage_upload(request_a, SimpleUploadedFile('stage.pdf', make_pdf_bytes(1)))
+        self.assertIsNone(staging.get_staged(self.request(user_b), str(staged.token)))
+        path = Path(settings.STAGING_TMP_DIR) / staged.relpath
+        self.assertTrue(path.exists())
+        staging.delete_staged(staged)
+        self.assertFalse(path.exists())
+        self.assertFalse(StagedDocument.objects.filter(token=staged.token).exists())
+
+
+class SecurityRegressionTests(TestCase):
+    def test_limits_are_configurable_and_filename_is_not_rendered_as_html(self):
+        self.assertGreater(settings.MAX_UPLOAD_SIZE, 0)
+        source = (Path(settings.BASE_DIR) / 'pdf_tools' / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
+        self.assertNotIn("'<span class=\"pf-file-name\">' + file.name", source)
+        self.assertIn('name.textContent = file.name', source)
+
+
+class PhaseOneProductionTests(TestCase):
+    def _settings_process(self, deployment_env, database_url, code):
+        env = os.environ.copy()
+        env.update({
+            'DJANGO_SETTINGS_MODULE': 'config.settings',
+            'DJANGO_ENV': deployment_env,
+            'DEBUG': 'False' if deployment_env == 'production' else 'True',
+            'SECRET_KEY': 'phase-one-test-secret-key',
+            'DATABASE_URL': database_url,
+        })
+        return subprocess.run(
+            [sys.executable, '-c', code],
+            cwd=settings.BASE_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_production_without_database_url_fails_closed(self):
+        result = self._settings_process('production', '', 'import django; django.setup()')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('DATABASE_URL', result.stderr)
+
+    def test_production_postgresql_configuration_loads(self):
+        result = self._settings_process(
+            'production',
+            'postgresql://db-user:db-password@db.example.test:5433/pdfino?sslmode=require',
+            "import django; django.setup(); from django.conf import settings; assert settings.DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql'; assert settings.DATABASES['default']['PORT'] == '5433'",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_development_without_database_url_uses_sqlite(self):
+        result = self._settings_process(
+            'development', '',
+            "import django; django.setup(); from django.conf import settings; assert settings.DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3'",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_processing_timeout_marks_job_failed_and_cleans_temp_files(self):
+        job = ConversionJob.objects.create(
+            tool_slug='compress-pdf', tool_name='Compress PDF', status=ConversionJob.Status.PROCESSING,
+        )
+        upload_dir = file_utils.new_upload_dir()
+        output_dir = file_utils.new_output_dir()
+        (upload_dir / 'input.pdf').write_bytes(b'input')
+        (output_dir / 'partial.pdf').write_bytes(b'partial')
+        try:
+            run_with_timeout(time.sleep, 1, timeout=0.1)
+        except ProcessingError as exc:
+            from pdf_tools.views import _finish_job
+            _finish_job(job, result_path=None, error=exc)
+            file_utils.cleanup_dir(upload_dir)
+            file_utils.cleanup_dir(output_dir)
+        else:
+            self.fail('Expected processing timeout')
+        job.refresh_from_db()
+        self.assertEqual(job.status, ConversionJob.Status.FAILED)
+        self.assertFalse(upload_dir.exists())
+        self.assertFalse(output_dir.exists())
+
+    def test_concurrency_admission_limits_one_client(self):
+        identity = 'phase-one-concurrency-test'
+        self.assertTrue(ProcessingAdmission.acquire(identity))
+        try:
+            self.assertFalse(ProcessingAdmission.acquire(identity))
+        finally:
+            ProcessingAdmission.release(identity)

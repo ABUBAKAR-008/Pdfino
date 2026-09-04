@@ -24,7 +24,7 @@
         {% endblock %}
         <div class="pf-result-actions">
           {% if job %}
-            <a href="{% url 'download' job.id %}" class="btn-pf-primary btn"><i class="fa-solid fa-download"></i>&nbsp; Download {{ job.result_filename }}</a>
+            <a href="{% url 'download' job.id %}{% if job.download_token %}?token={{ job.download_token }}{% endif %}" class="btn-pf-primary btn"><i class="fa-solid fa-download"></i>&nbsp; Download {{ job.result_filename }}</a>
           {% endif %}
           <a href="{% url tool.slug %}" class="btn-pf-outline btn">Start Again</a>
         </div>
